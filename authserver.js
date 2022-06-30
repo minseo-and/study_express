@@ -9,6 +9,14 @@ const jwt = require('jsonwebtoken')
 
 app.use(express.json())
 
+const mysql = require('mysql2');
+const connection = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: 'mojang0704',
+    database: 'myapp'
+  });
+
 let refreshTokens = []
 
 app.post('/token', (req, res) => {
