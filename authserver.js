@@ -1,115 +1,121 @@
-const express = require('express')
-const app = express()
-const port = 3000
+const express = require("express");
+const jwt = require("jsonwebtoken");
+const mysql = require("mysql2");
+const generateToken = require("./utils");
+require("dotenv").config();
 
-require('dotenv').config()
+const app = express();
+const port = process.env.PORT || 3000;
 
-const jwt = require('jsonwebtoken')
+app.use(express.json());
 
-
-app.use(express.json())
-
-const mysql = require('mysql2');
 const connection = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'mojang0704',
-    database: 'myapp'
+  host: process.env.HOST,
+  user: process.env.USERNAME,
+  password: process.env.PASSWORD,
+  database: process.env.DATABASE,
+  port: +process.env.PORT,
+});
+
+let refreshTokens = [];
+
+app.post("/refresh", (req, res) => {
+  const refreshToken = req.body.token;
+
+  if (!refreshToken || refreshToken === "") {
+    return res.sendStatus(401);
+  }
+
+  if (!refreshTokens.includes(refreshToken)) {
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(refreshToken, process.env.TOKEN_SECRET, (err, user) => {
+    if (err) {
+      return res.sendStatus(403);
+    }
+    const accessToken = generateAccessToken({ name: user.name });
+    res.status(200).json({ accessToken });
   });
+});
 
-let refreshTokens = []
+app.get("/sign-out", (req, res) => {
+  refreshTokens = refreshTokens.filter((token) => token !== req.body.token);
+  res.sendStatus(204);
+});
 
-app.post('/token', (req, res) => {
-    const refreshToken = req.body.token
-    if (refreshToken == null) return res.sendStatus(401)
-    if (!refreshTokens.includes(refreshToken)) return res.sendStatus(403)
-    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403)
-        const accessToken = generateAccessToken({ name : user.name})
-        res.json({accessToken:accessToken})
-    })
-})
-
-app.delete('/logout', (req, res) => {
-    refreshTokens = refreshTokens.filter( token => token !== req.body.token)
-    res.sendStatus(204)
-})
-
-
-app.post('/signin', (req, res) => {
-  const { body } = req;
+app.post("/sign-in", (req, res) => {
+  const { body, session } = req;
   const { username, password } = body;
-
-  const user = { name : username }
+  const user = { name: body.username };
 
   if (username && password) {
-		
-		connection.query('SELECT * FROM accounts WHERE username = ? AND password = ?', [username, password], function(error, results, fields) {
-		
-			if (error) throw error;
-			
-			if (results.length > 0) {
-			
-				request.session.loggedin = true;
-				request.session.username = username;
-				
-				response.redirect('/home');
-			} else {
-				response.send('Incorrect Username and/or Password!');
-			}			
-			response.end();
-		});
-	} else {
-		response.send('Please enter Username and Password!');
-		response.end();
-	}
+    const results = connection.query(
+      "SELECT * FROM accounts WHERE username = ? AND password = ?",
+      [username, password],
+      function (error, results, fields) {
+        if (error) {
+          throw error;
+        } else {
+          return results;
+        }
+      }
+    );
 
-  const accessToken = generateAccessToken(user)
-  const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
-  refreshTokens.push(refreshToken)
-  res.json({ accessToken : accessToken, refreshToken : refreshToken })
+    if (results.length > 0) {
+      const accessToken = generateToken(user, "1m");
+      const refreshToken = generateToken({}, "3m");
 
-})
+      session.loggedin = true;
+      session.username = username;
+      refreshTokens.push(refreshToken);
 
-app.post('/signup', (req, res) => {
-  const { body } = req;
-  const { id, username, password, email} = body;
+      res.status(200).json({ accessToken, refreshToken }).end();
+      return;
+    }
+    res.status(401).json({ msg: "Incorrect Username and/or Password!" }).end();
+    return;
+  } else {
+    res.status(400).json({ msg: "Please enter Username and Password!" }).end();
+  }
+});
 
+app.post("/sign-up", (req, res) => {
+  const { body, session } = req;
+  const { id, username, password, email } = body;
 
   if (id && username && password && email) {
-		
-		connection.query('SELECT * FROM accounts WHERE username = ? AND password = ?', [id, username, password, email], function(error, results, fields) {
-		
-			if (error) throw error;
-			
-			if (results.length > 0) {
-			
-				request.session.loggedin = true;
-				request.session.username = username;
-				
-				response.redirect('/home');
-			} else {
-				response.send('Incorrect Username and/or Password!');
-			}			
-			response.end();
-		});
-	} else {
-		response.send('Please enter Username and Password!');
-		response.end();
-	}
+    const results = connection.query(
+      "SELECT * FROM accounts WHERE username = ? AND password = ?",
+      [id, username, password, email],
+      function (error, results, fields) {
+        if (error) {
+          throw error;
+        } else {
+          return results;
+        }
+      }
+    );
 
-})
+    if (results.length > 0) {
+      session.loggedin = true;
+      session.username = username;
 
+      res.status(201).json({ msg: "success" }).end();
+      return;
+    } else {
+      res.status(400).json({ msg: "fail" }).end();
+      return;
+    }
+  } else {
+    res.status(400).json({ msg: "Please enter Username and Password!" }).end();
+  }
+});
 
-
-function generateAccessToken(user) {
-    return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15s' })
-}
-
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
 
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-  })
+  console.log(`Example app listening on port ${port}`);
+});
