@@ -1,6 +1,6 @@
 const express = require('express')
 const app = express()
-const port = 4000
+const port = 3000
 
 require('dotenv').config()
 
@@ -38,9 +38,31 @@ app.delete('/logout', (req, res) => {
 
 app.post('/signin', (req, res) => {
   const { body } = req;
-  const { username } = body;
+  const { username, password } = body;
 
   const user = { name : username }
+
+  if (username && password) {
+		
+		connection.query('SELECT * FROM accounts WHERE username = ? AND password = ?', [username, password], function(error, results, fields) {
+		
+			if (error) throw error;
+			
+			if (results.length > 0) {
+			
+				request.session.loggedin = true;
+				request.session.username = username;
+				
+				response.redirect('/home');
+			} else {
+				response.send('Incorrect Username and/or Password!');
+			}			
+			response.end();
+		});
+	} else {
+		response.send('Please enter Username and Password!');
+		response.end();
+	}
 
   const accessToken = generateAccessToken(user)
   const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
@@ -49,10 +71,44 @@ app.post('/signin', (req, res) => {
 
 })
 
+app.post('/signup', (req, res) => {
+  const { body } = req;
+  const { id, username, password, email} = body;
+
+
+  if (id && username && password && email) {
+		
+		connection.query('SELECT * FROM accounts WHERE username = ? AND password = ?', [id, username, password, email], function(error, results, fields) {
+		
+			if (error) throw error;
+			
+			if (results.length > 0) {
+			
+				request.session.loggedin = true;
+				request.session.username = username;
+				
+				response.redirect('/home');
+			} else {
+				response.send('Incorrect Username and/or Password!');
+			}			
+			response.end();
+		});
+	} else {
+		response.send('Please enter Username and Password!');
+		response.end();
+	}
+
+})
+
+
 
 function generateAccessToken(user) {
     return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15s' })
 }
+
+app.get('/', (req, res) => {
+  res.send('Hello World!')
+})
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
